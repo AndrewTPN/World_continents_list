@@ -35,8 +35,8 @@
     }
 
     .sidebar {
-      width: 320px;
-      min-width: 280px;
+      width: 260px;
+      min-width: 220px;
       background: var(--surface);
       border-right: 1px solid rgba(126, 184, 218, 0.15);
       display: flex;
@@ -50,16 +50,16 @@
     }
 
     .sidebar-header h1 {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 600;
       letter-spacing: 0.02em;
       color: var(--accent);
     }
 
     .sidebar-header p {
-      font-size: 0.9rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
-      margin-top: 0.35rem;
+      margin-top: 0.25rem;
     }
 
     .continents-list {
@@ -103,12 +103,12 @@
 
     .continent-header .name {
       flex: 1;
-      font-size: 1rem;
+      font-size: 0.9rem;
     }
 
     .continent-header .count {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
     }
 
@@ -123,8 +123,8 @@
     }
 
     .country-item {
-      padding: 0.35rem 1.25rem 0.35rem 2.5rem;
-      font-size: 0.9rem;
+      padding: 0.3rem 1rem 0.3rem 2rem;
+      font-size: 0.82rem;
       color: var(--text-muted);
       cursor: pointer;
       transition: color 0.2s, background 0.2s;
@@ -144,6 +144,10 @@
       flex: 1;
       position: relative;
       overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse 80% 80% at 50% 50%, #1a2838 0%, var(--bg) 70%);
     }
 
     #map {
@@ -151,12 +155,19 @@
       height: 100%;
     }
 
+    .globe-circle {
+      fill: #15202b;
+      stroke: rgba(126, 184, 218, 0.35);
+      stroke-width: 1.5;
+    }
+
     .country-path {
       fill: #243447;
       stroke: #3d5568;
       stroke-width: 0.3px;
+      stroke-linejoin: round;
       cursor: pointer;
-      transition: fill 0.2s, stroke 0.2s;
+      transition: fill 0.2s, stroke 0.2s, opacity 0.25s;
     }
 
     .country-path:hover {
@@ -165,9 +176,11 @@
     }
 
     .country-path.highlighted {
-      fill: var(--accent-dim);
-      stroke: var(--accent);
-      stroke-width: 0.5px;
+      fill: #8fc9e8;
+      stroke: #b8e0f5;
+      stroke-width: 1.2px;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 6px rgba(126, 184, 218, 0.5));
     }
 
     .country-path.continent-active {
@@ -175,7 +188,11 @@
     }
 
     .country-path.continent-active.highlighted {
-      fill: var(--accent-dim);
+      fill: #8fc9e8;
+    }
+
+    .map-container.country-focused .country-path:not(.highlighted) {
+      opacity: 0.4;
     }
 
     .tooltip {
@@ -211,7 +228,7 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <h1>World Continents</h1>
-        <p>Click a continent to see countries. Hover the map for shapes.</p>
+        <p>Click a country — the map spins to it. Hover for shapes.</p>
       </div>
       <nav class="continents-list" id="continents-list"></nav>
     </aside>
@@ -235,7 +252,17 @@
     let worldData = null;
     let countryToContinent = {};
     let selectedContinent = null;
+    let selectedCountry = null;
     let hoveredCountry = null;
+    let projection = null;
+    let pathGenerator = null;
+    let countriesFeatures = null;
+    let mapGroup = null;
+    let currentCenter = [0, 25];
+    let currentScale = null;
+    let baseScale = null;
+    let animating = false;
+    const ZOOM_IN_FACTOR = 2;
 
     const CONTINENTS_DATA = {
       "Africa": ["Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi","Cameroon","Cabo Verde","Central African Rep.","Chad","Comoros","Congo","Dem. Rep. Congo","Côte d'Ivoire","Djibouti","Egypt","Eq. Guinea","Eritrea","eSwatini","Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau","Kenya","Lesotho","Liberia","Libya","Madagascar","Malawi","Mali","Mauritania","Mauritius","Morocco","Mozambique","Namibia","Niger","Nigeria","Rwanda","São Tomé and Principe","Senegal","Seychelles","Sierra Leone","Somalia","South Africa","S. Sudan","Sudan","Tanzania","Togo","Tunisia","Uganda","Zambia","Zimbabwe","W. Sahara"],
@@ -263,15 +290,23 @@
     function render() {
       const { topo, continents } = worldData;
       const countries = topojson.feature(topo, topo.objects.countries);
+      countriesFeatures = countries.features;
       const container = document.querySelector('.map-container');
       const width = container.clientWidth;
       const height = container.clientHeight;
 
-      const projection = d3.geoMercator()
-        .scale(width / 5.8)
-        .translate([width / 2, height / 1.4]);
+      const size = Math.min(width, height);
+      const cx = width / 2;
+      const cy = height / 2;
+      baseScale = size / 2 - 4;
+      if (currentScale == null) currentScale = baseScale;
+      projection = d3.geoOrthographic()
+        .scale(currentScale)
+        .translate([cx, cy])
+        .clipAngle(90)
+        .rotate([-currentCenter[0], -currentCenter[1], 0]);
 
-      const path = d3.geoPath().projection(projection);
+      pathGenerator = d3.geoPath().projection(projection);
 
       const svg = d3.select('#map')
         .attr('viewBox', [0, 0, width, height])
@@ -279,12 +314,20 @@
 
       svg.selectAll('*').remove();
 
-      svg.append('g')
-        .selectAll('path')
+      const globeR = size / 2 - 4;
+      const defs = svg.append('defs');
+      defs.append('clipPath').attr('id', 'globe-clip').append('circle')
+        .attr('cx', cx).attr('cy', cy).attr('r', globeR);
+
+      svg.append('circle').attr('class', 'globe-circle')
+        .attr('cx', cx).attr('cy', cy).attr('r', globeR);
+
+      mapGroup = svg.append('g').attr('clip-path', 'url(#globe-clip)');
+      mapGroup.selectAll('path')
         .data(countries.features)
         .join('path')
         .attr('class', 'country-path')
-        .attr('d', path)
+        .attr('d', pathGenerator)
         .attr('data-name', d => d.properties?.name || '')
         .on('mouseenter', function(event, d) {
           const name = d.properties?.name || '';
@@ -302,9 +345,91 @@
           const name = d.properties?.name || '';
           const continent = countryToContinent[name];
           if (continent) selectContinent(continent);
+          spinToCountry(name);
         });
 
       renderSidebar(continents);
+    }
+
+    function spinToCountry(countryName) {
+      if (!countriesFeatures || !projection || !pathGenerator || !mapGroup || animating) return;
+      const feature = countriesFeatures.find(f => (f.properties?.name || '') === countryName);
+      if (!feature) return;
+      selectedCountry = countryName;
+      updateHighlights();
+      let targetCenter;
+      try {
+        targetCenter = d3.geoCentroid(feature);
+      } catch (e) {
+        const b = d3.geoBounds(feature);
+        targetCenter = [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+      }
+      const startCenter = currentCenter.slice();
+      let lon = targetCenter[0];
+      const startLon = startCenter[0];
+      while (lon - startLon > 180) lon -= 360;
+      while (lon - startLon < -180) lon += 360;
+      targetCenter = [lon, targetCenter[1]];
+      animating = true;
+      const zoomOutDuration = 600;
+      const spinDuration = 1200;
+      const zoomInDuration = 600;
+      const startTime = performance.now();
+      const startScale = currentScale != null ? currentScale : (baseScale != null ? baseScale : projection.scale());
+      const theBaseScale = baseScale != null ? baseScale : startScale;
+      const targetScale = theBaseScale * ZOOM_IN_FACTOR;
+      const needZoomOut = theBaseScale > 0 && startScale > theBaseScale * 1.05;
+
+      function tick(now) {
+        const elapsed = now - startTime;
+        let phaseStart = 0;
+
+        if (needZoomOut) {
+          if (elapsed < zoomOutDuration) {
+            const t = Math.min(1, elapsed / zoomOutDuration);
+            const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            currentScale = startScale + (theBaseScale - startScale) * eased;
+            currentCenter[0] = startCenter[0];
+            currentCenter[1] = startCenter[1];
+          }
+          phaseStart = zoomOutDuration;
+        }
+
+        if (elapsed >= phaseStart && elapsed < phaseStart + spinDuration) {
+          const spinElapsed = elapsed - phaseStart;
+          const t = Math.min(1, spinElapsed / spinDuration);
+          const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+          currentCenter[0] = startCenter[0] + (targetCenter[0] - startCenter[0]) * eased;
+          currentCenter[1] = startCenter[1] + (targetCenter[1] - startCenter[1]) * eased;
+          currentScale = theBaseScale;
+        } else if (elapsed >= phaseStart + spinDuration) {
+          currentCenter[0] = targetCenter[0];
+          currentCenter[1] = targetCenter[1];
+          const zoomElapsed = elapsed - phaseStart - spinDuration;
+          const t = Math.min(1, zoomElapsed / zoomInDuration);
+          const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+          currentScale = theBaseScale + (targetScale - theBaseScale) * eased;
+        }
+
+        projection.rotate([-currentCenter[0], -currentCenter[1], 0]).scale(currentScale);
+        pathGenerator.projection(projection);
+        mapGroup.selectAll('.country-path').attr('d', pathGenerator);
+
+        const totalDuration = (needZoomOut ? zoomOutDuration : 0) + spinDuration + zoomInDuration;
+        if (elapsed < totalDuration) {
+          requestAnimationFrame(tick);
+        } else {
+          currentScale = targetScale;
+          animating = false;
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function highlightCountryAndSpin(countryName) {
+      hoveredCountry = countryName;
+      updateHighlights();
+      spinToCountry(countryName);
     }
 
     function renderSidebar(continents) {
@@ -352,8 +477,9 @@
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           const country = el.dataset.country;
-          hoveredCountry = country;
-          updateHighlights();
+          const continent = countryToContinent[country];
+          if (continent) selectContinent(continent);
+          highlightCountryAndSpin(country);
         });
         el.addEventListener('mouseenter', () => {
           hoveredCountry = el.dataset.country;
@@ -377,20 +503,25 @@
     function updateHighlights() {
       const paths = document.querySelectorAll('.country-path');
       const items = document.querySelectorAll('.country-item');
+      const container = document.querySelector('.map-container');
+      if (container) container.classList.toggle('country-focused', !!selectedCountry);
 
       paths.forEach(path => {
         const name = path.dataset.name;
         const continent = countryToContinent[name];
-        const isHovered = name === hoveredCountry;
+        const isSelected = name === selectedCountry;
         const inSelected = !selectedContinent || continent === selectedContinent;
 
         path.classList.toggle('continent-active', inSelected && selectedContinent);
-        path.classList.toggle('highlighted', isHovered);
-        path.style.opacity = selectedContinent && !inSelected ? 0.2 : 1;
+        path.classList.toggle('highlighted', isSelected);
+        let opacity = 1;
+        if (selectedCountry && !isSelected) opacity = 0.4;
+        else if (selectedContinent && !inSelected) opacity = 0.2;
+        path.style.opacity = opacity;
       });
 
       items.forEach(item => {
-        item.classList.toggle('highlighted', item.dataset.country === hoveredCountry);
+        item.classList.toggle('highlighted', item.dataset.country === selectedCountry || item.dataset.country === hoveredCountry);
       });
     }
 
