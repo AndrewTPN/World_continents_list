@@ -62,6 +62,90 @@
       margin-top: 0.25rem;
     }
 
+    .search-wrap {
+      padding: 0 1rem 0.75rem;
+      border-bottom: 1px solid rgba(126, 184, 218, 0.1);
+      position: relative;
+    }
+
+    .search-wrap input {
+      width: 100%;
+      padding: 0.5rem 0.75rem 0.5rem 2rem;
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 0.9rem;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid rgba(126, 184, 218, 0.2);
+      border-radius: 4px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .search-wrap input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .search-wrap input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(126, 184, 218, 0.2);
+    }
+
+    .search-wrap .search-icon {
+      position: absolute;
+      left: 1.4rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    .search-results {
+      position: absolute;
+      left: 1rem;
+      right: 1rem;
+      top: 100%;
+      margin-top: 2px;
+      max-height: 220px;
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid rgba(126, 184, 218, 0.25);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 50;
+      display: none;
+    }
+
+    .search-results.visible {
+      display: block;
+    }
+
+    .search-results .result-item {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      border-bottom: 1px solid rgba(126, 184, 218, 0.06);
+    }
+
+    .search-results .result-item:last-child {
+      border-bottom: none;
+    }
+
+    .search-results .result-item:hover,
+    .search-results .result-item.focused {
+      background: rgba(126, 184, 218, 0.12);
+      color: var(--accent);
+    }
+
+    .search-results .result-item .continent-tag {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      opacity: 0.8;
+      margin-left: 0.35rem;
+    }
+
     .continents-list {
       flex: 1;
       overflow-y: auto;
@@ -153,6 +237,11 @@
     #map {
       width: 100%;
       height: 100%;
+      cursor: grab;
+    }
+
+    #map:active {
+      cursor: grabbing;
     }
 
     .globe-circle {
@@ -230,6 +319,11 @@
         <h1>World Continents</h1>
         <p>Click a country — the map spins to it. Hover for shapes.</p>
       </div>
+      <div class="search-wrap">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input type="text" id="country-search" placeholder="Search country..." autocomplete="off" />
+        <div class="search-results" id="search-results"></div>
+      </div>
       <nav class="continents-list" id="continents-list"></nav>
     </aside>
     <main class="map-container">
@@ -262,7 +356,12 @@
     let currentScale = null;
     let baseScale = null;
     let animating = false;
+    let isDragging = false;
     const ZOOM_IN_FACTOR = 2;
+    const DRAG_SENSITIVITY = 0.35;
+    const WHEEL_ZOOM_FACTOR = 1.08;
+    const MIN_ZOOM = 0.4;
+    const MAX_ZOOM = 4;
 
     const CONTINENTS_DATA = {
       "Africa": ["Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi","Cameroon","Cabo Verde","Central African Rep.","Chad","Comoros","Congo","Dem. Rep. Congo","Côte d'Ivoire","Djibouti","Egypt","Eq. Guinea","Eritrea","eSwatini","Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau","Kenya","Lesotho","Liberia","Libya","Madagascar","Malawi","Mali","Mauritania","Mauritius","Morocco","Mozambique","Namibia","Niger","Nigeria","Rwanda","São Tomé and Principe","Senegal","Seychelles","Sierra Leone","Somalia","South Africa","S. Sudan","Sudan","Tanzania","Togo","Tunisia","Uganda","Zambia","Zimbabwe","W. Sahara"],
@@ -342,11 +441,35 @@
           hideTooltip();
         })
         .on('click', (event, d) => {
+          if (isDragging) return;
           const name = d.properties?.name || '';
           const continent = countryToContinent[name];
           if (continent) selectContinent(continent);
           spinToCountry(name);
         });
+
+      svg.call(d3.drag()
+        .on('start', () => { isDragging = false; })
+        .on('drag', (event) => {
+          isDragging = true;
+          currentCenter[0] -= event.dx * DRAG_SENSITIVITY;
+          currentCenter[1] += event.dy * DRAG_SENSITIVITY;
+          currentCenter[1] = Math.max(-85, Math.min(85, currentCenter[1]));
+          projection.rotate([-currentCenter[0], -currentCenter[1], 0]);
+          pathGenerator.projection(projection);
+          mapGroup.selectAll('.country-path').attr('d', pathGenerator);
+        })
+        .on('end', () => { setTimeout(() => { isDragging = false; }, 0); }));
+
+      svg.on('wheel', function(event) {
+        event.preventDefault();
+        if (!baseScale || !projection || !pathGenerator || !mapGroup) return;
+        const k = event.deltaY > 0 ? 1 / WHEEL_ZOOM_FACTOR : WHEEL_ZOOM_FACTOR;
+        currentScale = Math.max(baseScale * MIN_ZOOM, Math.min(baseScale * MAX_ZOOM, currentScale * k));
+        projection.scale(currentScale);
+        pathGenerator.projection(projection);
+        mapGroup.selectAll('.country-path').attr('d', pathGenerator);
+      }, { passive: false });
 
       renderSidebar(continents);
     }
@@ -432,6 +555,89 @@
       spinToCountry(countryName);
     }
 
+    function setupSearch() {
+      const allCountries = [];
+      for (const [continent, countries] of Object.entries(CONTINENTS_DATA)) {
+        countries.forEach(c => allCountries.push({ name: c, continent }));
+      }
+
+      const input = document.getElementById('country-search');
+      const resultsEl = document.getElementById('search-results');
+      if (!input || !resultsEl) return;
+
+      let focusedIndex = -1;
+
+      function showResults(matches) {
+        resultsEl.innerHTML = '';
+        focusedIndex = -1;
+        if (matches.length === 0) {
+          resultsEl.classList.remove('visible');
+          return;
+        }
+        matches.slice(0, 12).forEach((m, i) => {
+          const div = document.createElement('div');
+          div.className = 'result-item';
+          div.dataset.country = m.name;
+          div.innerHTML = `${m.name}<span class="continent-tag">${m.continent}</span>`;
+          div.addEventListener('click', () => selectFromSearch(m.name));
+          resultsEl.appendChild(div);
+        });
+        resultsEl.classList.add('visible');
+      }
+
+      function selectFromSearch(countryName) {
+        input.value = '';
+        resultsEl.classList.remove('visible');
+        input.blur();
+        const continent = countryToContinent[countryName];
+        if (continent) selectContinent(continent);
+        highlightCountryAndSpin(countryName);
+      }
+
+      function getMatches() {
+        const q = (input.value || '').trim().toLowerCase();
+        if (q.length < 2) return [];
+        return allCountries.filter(({ name }) => name.toLowerCase().includes(q));
+      }
+
+      input.addEventListener('input', () => showResults(getMatches()));
+      input.addEventListener('focus', () => { if (getMatches().length) showResults(getMatches()); });
+      input.addEventListener('keydown', (e) => {
+        const items = resultsEl.querySelectorAll('.result-item');
+        if (e.key === 'Escape') {
+          resultsEl.classList.remove('visible');
+          input.blur();
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (items.length) {
+            const idx = focusedIndex >= 0 ? focusedIndex : 0;
+            const country = items[idx]?.dataset.country;
+            if (country) selectFromSearch(country);
+          }
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          focusedIndex = Math.min(focusedIndex + 1, items.length - 1);
+          items.forEach((el, i) => el.classList.toggle('focused', i === focusedIndex));
+          items[focusedIndex]?.scrollIntoView({ block: 'nearest' });
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          focusedIndex = Math.max(focusedIndex - 1, -1);
+          items.forEach((el, i) => el.classList.toggle('focused', i === focusedIndex));
+          if (focusedIndex >= 0) items[focusedIndex].scrollIntoView({ block: 'nearest' });
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !resultsEl.contains(e.target)) resultsEl.classList.remove('visible');
+      });
+    }
+
     function renderSidebar(continents) {
       const list = document.getElementById('continents-list');
       list.innerHTML = '';
@@ -490,6 +696,8 @@
           updateHighlights();
         });
       });
+
+      setupSearch();
     }
 
     function selectContinent(continent) {
