@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>World – Continents & Country Shapes</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --accent: #7eb8da;
+      --accent-dim: #4a90b8;
+      --text: #e6edf3;
+      --text-muted: #8b9eb5;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Crimson Pro', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .layout {
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      width: 320px;
+      min-width: 280px;
+      background: var(--surface);
+      border-right: 1px solid rgba(126, 184, 218, 0.15);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid rgba(126, 184, 218, 0.1);
+    }
+
+    .sidebar-header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--accent);
+    }
+
+    .sidebar-header p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+
+    .continents-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 0;
+    }
+
+    .continent {
+      margin-bottom: 0.5rem;
+    }
+
+    .continent-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.25rem;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .continent-header:hover {
+      background: rgba(126, 184, 218, 0.08);
+      color: var(--accent);
+    }
+
+    .continent-header.active {
+      background: rgba(126, 184, 218, 0.12);
+      color: var(--accent);
+    }
+
+    .continent-header .arrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      transition: transform 0.2s;
+    }
+
+    .continent-header.expanded .arrow {
+      transform: rotate(90deg);
+    }
+
+    .continent-header .name {
+      flex: 1;
+      font-size: 1rem;
+    }
+
+    .continent-header .count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .countries {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .continent.expanded .countries {
+      max-height: 2000px;
+    }
+
+    .country-item {
+      padding: 0.35rem 1.25rem 0.35rem 2.5rem;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: color 0.2s, background 0.2s;
+    }
+
+    .country-item:hover {
+      color: var(--accent);
+      background: rgba(126, 184, 218, 0.05);
+    }
+
+    .country-item.highlighted {
+      color: var(--accent);
+      background: rgba(126, 184, 218, 0.08);
+    }
+
+    .map-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .country-path {
+      fill: #243447;
+      stroke: #3d5568;
+      stroke-width: 0.3px;
+      cursor: pointer;
+      transition: fill 0.2s, stroke 0.2s;
+    }
+
+    .country-path:hover {
+      fill: var(--accent-dim);
+      stroke: var(--accent);
+    }
+
+    .country-path.highlighted {
+      fill: var(--accent-dim);
+      stroke: var(--accent);
+      stroke-width: 0.5px;
+    }
+
+    .country-path.continent-active {
+      fill: #2d4158;
+    }
+
+    .country-path.continent-active.highlighted {
+      fill: var(--accent-dim);
+    }
+
+    .tooltip {
+      position: fixed;
+      background: var(--surface);
+      border: 1px solid rgba(126, 184, 218, 0.3);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 100;
+      border-radius: 4px;
+    }
+
+    .tooltip.visible {
+      opacity: 1;
+    }
+
+    .tooltip .country-name {
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .tooltip .continent-name {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>World Continents</h1>
+        <p>Click a continent to see countries. Hover the map for shapes.</p>
+      </div>
+      <nav class="continents-list" id="continents-list"></nav>
+    </aside>
+    <main class="map-container">
+      <svg id="map"></svg>
+      <div class="tooltip" id="tooltip"></div>
+    </main>
+  </div>
+
+  <script>
+    const CONTINENT_COLORS = {
+      Africa: '#c45c4a',
+      Asia: '#5a9e6e',
+      Europe: '#6b8dc4',
+      'North America': '#b88b4a',
+      'South America': '#8b6b9e',
+      Oceania: '#7eb8da',
+      Antarctica: '#6b9eb8'
+    };
+
+    let worldData = null;
+    let countryToContinent = {};
+    let selectedContinent = null;
+    let hoveredCountry = null;
+
+    const CONTINENTS_DATA = {
+      "Africa": ["Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi","Cameroon","Cabo Verde","Central African Rep.","Chad","Comoros","Congo","Dem. Rep. Congo","Côte d'Ivoire","Djibouti","Egypt","Eq. Guinea","Eritrea","eSwatini","Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea-Bissau","Kenya","Lesotho","Liberia","Libya","Madagascar","Malawi","Mali","Mauritania","Mauritius","Morocco","Mozambique","Namibia","Niger","Nigeria","Rwanda","São Tomé and Principe","Senegal","Seychelles","Sierra Leone","Somalia","South Africa","S. Sudan","Sudan","Tanzania","Togo","Tunisia","Uganda","Zambia","Zimbabwe","W. Sahara"],
+      "Asia": ["Afghanistan","Armenia","Azerbaijan","Bahrain","Bangladesh","Bhutan","Brunei","Cambodia","China","Cyprus","Georgia","India","Indonesia","Iran","Iraq","Israel","Japan","Jordan","Kazakhstan","Kuwait","Kyrgyzstan","Laos","Lebanon","Malaysia","Maldives","Mongolia","Myanmar","Nepal","North Korea","Oman","Pakistan","Palestine","Philippines","Qatar","Saudi Arabia","Singapore","South Korea","Sri Lanka","Syria","Taiwan","Tajikistan","Thailand","Timor-Leste","Turkey","Turkmenistan","United Arab Emirates","Uzbekistan","Vietnam","Yemen","N. Cyprus"],
+      "Europe": ["Albania","Andorra","Austria","Belarus","Belgium","Bosnia and Herz.","Bulgaria","Croatia","Czechia","Denmark","Estonia","Finland","France","Germany","Greece","Hungary","Iceland","Ireland","Italy","Kosovo","Latvia","Liechtenstein","Lithuania","Luxembourg","Macedonia","Malta","Moldova","Monaco","Montenegro","Netherlands","Norway","Poland","Portugal","Romania","Russia","San Marino","Serbia","Slovakia","Slovenia","Spain","Sweden","Switzerland","Ukraine","United Kingdom","Vatican","Åland","Faeroe Is.","Guernsey","Isle of Man","Jersey"],
+      "North America": ["Antigua and Barbuda","Bahamas","Barbados","Belize","Canada","Costa Rica","Cuba","Dominica","Dominican Rep.","El Salvador","Grenada","Guatemala","Haiti","Honduras","Jamaica","Mexico","Nicaragua","Panama","St. Kitts and Nevis","St. Lucia","St. Vin. and Gren.","Trinidad and Tobago","United States of America","Anguilla","Bermuda","British Virgin Is.","Cayman Is.","Greenland","Montserrat","Puerto Rico","St. Pierre and Miquelon","Turks and Caicos Is.","U.S. Virgin Is."],
+      "South America": ["Argentina","Bolivia","Brazil","Chile","Colombia","Ecuador","Guyana","Paraguay","Peru","Suriname","Uruguay","Venezuela","Falkland Is."],
+      "Oceania": ["Australia","Fiji","Kiribati","Marshall Is.","Micronesia","Nauru","New Zealand","Palau","Papua New Guinea","Samoa","Solomon Is.","Tonga","Tuvalu","Vanuatu","American Samoa","Cook Is.","Fr. Polynesia","Guam","New Caledonia","Niue","N. Mariana Is.","Pitcairn Is.","Wallis and Futuna Is."],
+      "Antarctica": ["Antarctica","Fr. S. Antarctic Lands","Br. Indian Ocean Ter.","S. Geo. and the Is."]
+    };
+
+    async function loadData() {
+      const topoRes = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json');
+      const topo = await topoRes.json();
+      const continents = CONTINENTS_DATA;
+
+      for (const [continent, countries] of Object.entries(continents)) {
+        countries.forEach(c => { countryToContinent[c] = continent; });
+      }
+
+      worldData = { topo, continents };
+      render();
+    }
+
+    function render() {
+      const { topo, continents } = worldData;
+      const countries = topojson.feature(topo, topo.objects.countries);
+      const container = document.querySelector('.map-container');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      const projection = d3.geoMercator()
+        .scale(width / 5.8)
+        .translate([width / 2, height / 1.4]);
+
+      const path = d3.geoPath().projection(projection);
+
+      const svg = d3.select('#map')
+        .attr('viewBox', [0, 0, width, height])
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+
+      svg.selectAll('*').remove();
+
+      svg.append('g')
+        .selectAll('path')
+        .data(countries.features)
+        .join('path')
+        .attr('class', 'country-path')
+        .attr('d', path)
+        .attr('data-name', d => d.properties?.name || '')
+        .on('mouseenter', function(event, d) {
+          const name = d.properties?.name || '';
+          hoveredCountry = name;
+          updateHighlights();
+          showTooltip(event, name);
+        })
+        .on('mousemove', (event) => moveTooltip(event))
+        .on('mouseleave', function() {
+          hoveredCountry = null;
+          updateHighlights();
+          hideTooltip();
+        })
+        .on('click', (event, d) => {
+          const name = d.properties?.name || '';
+          const continent = countryToContinent[name];
+          if (continent) selectContinent(continent);
+        });
+
+      renderSidebar(continents);
+    }
+
+    function renderSidebar(continents) {
+      const list = document.getElementById('continents-list');
+      list.innerHTML = '';
+
+      for (const [name, countries] of Object.entries(continents)) {
+        const div = document.createElement('div');
+        div.className = 'continent';
+        div.innerHTML = `
+          <div class="continent-header" data-continent="${name}">
+            <span class="arrow">›</span>
+            <span class="name">${name}</span>
+            <span class="count">${countries.length}</span>
+          </div>
+          <div class="countries">
+            ${countries.map(c => `
+              <div class="country-item" data-country="${c}">${c}</div>
+            `).join('')}
+          </div>
+        `;
+        list.appendChild(div);
+      }
+
+      document.querySelectorAll('.continent-header').forEach(el => {
+        el.addEventListener('click', () => {
+          const continent = el.dataset.continent;
+          const parent = el.closest('.continent');
+          const wasExpanded = parent.classList.contains('expanded');
+          document.querySelectorAll('.continent').forEach(c => {
+            c.classList.remove('expanded');
+            c.querySelector('.continent-header').classList.remove('expanded', 'active');
+          });
+          if (!wasExpanded) {
+            parent.classList.add('expanded');
+            el.classList.add('expanded', 'active');
+            selectContinent(continent);
+          } else {
+            selectContinent(null);
+          }
+        });
+      });
+
+      document.querySelectorAll('.country-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const country = el.dataset.country;
+          hoveredCountry = country;
+          updateHighlights();
+        });
+        el.addEventListener('mouseenter', () => {
+          hoveredCountry = el.dataset.country;
+          updateHighlights();
+        });
+        el.addEventListener('mouseleave', () => {
+          hoveredCountry = null;
+          updateHighlights();
+        });
+      });
+    }
+
+    function selectContinent(continent) {
+      selectedContinent = continent;
+      document.querySelectorAll('.continent-header').forEach(el => {
+        el.classList.toggle('active', el.dataset.continent === continent);
+      });
+      updateHighlights();
+    }
+
+    function updateHighlights() {
+      const paths = document.querySelectorAll('.country-path');
+      const items = document.querySelectorAll('.country-item');
+
+      paths.forEach(path => {
+        const name = path.dataset.name;
+        const continent = countryToContinent[name];
+        const isHovered = name === hoveredCountry;
+        const inSelected = !selectedContinent || continent === selectedContinent;
+
+        path.classList.toggle('continent-active', inSelected && selectedContinent);
+        path.classList.toggle('highlighted', isHovered);
+        path.style.opacity = selectedContinent && !inSelected ? 0.2 : 1;
+      });
+
+      items.forEach(item => {
+        item.classList.toggle('highlighted', item.dataset.country === hoveredCountry);
+      });
+    }
+
+    function showTooltip(event, countryName) {
+      const continent = countryToContinent[countryName] || '—';
+      const tooltip = document.getElementById('tooltip');
+      tooltip.innerHTML = `
+        <span class="country-name">${countryName}</span><br>
+        <span class="continent-name">${continent}</span>
+      `;
+      tooltip.classList.add('visible');
+      moveTooltip(event);
+    }
+
+    function moveTooltip(event) {
+      const tooltip = document.getElementById('tooltip');
+      const x = event.clientX;
+      const y = event.clientY;
+      const rect = tooltip.getBoundingClientRect();
+      const pad = 12;
+
+      let left = x + pad;
+      let top = y + pad;
+
+      if (left + rect.width > window.innerWidth) left = x - rect.width - pad;
+      if (top + rect.height > window.innerHeight) top = y - rect.height - pad;
+
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+    }
+
+    function hideTooltip() {
+      document.getElementById('tooltip').classList.remove('visible');
+    }
+
+    window.addEventListener('resize', () => worldData && render());
+    loadData();
+  </script>
+</body>
+</html>
