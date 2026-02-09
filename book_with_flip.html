@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f6f2ea;
+      --paper-edge: #e8e0d4;
+      --ink: #2c2825;
+      --ink-muted: #5a5550;
+      --spine-dark: #6b5d4f;
+      --spine-mid: #8b7d6d;
+      --spine-light: #a89888;
+      --accent: #6b5344;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { min-height: 100%; }
+
+    body {
+      font-family: 'Crimson Pro', Georgia, serif;
+      background: #1a1612;
+      color: var(--ink);
+      min-height: 100vh;
+      padding: 3rem 1rem;
+      line-height: 1.65;
+    }
+
+    .book-holder {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2rem 0;
+      perspective: 550px;
+      perspective-origin: 50% 50%;
+    }
+
+    .book-wrap {
+      display: flex;
+      align-items: stretch;
+      border-radius: 0 8px 8px 0;
+      box-shadow:
+        inset 0 0 0 1px rgba(0,0,0,0.06),
+        2px 0 12px rgba(0,0,0,0.15),
+        4px 0 24px rgba(0,0,0,0.2),
+        8px 8px 40px rgba(0,0,0,0.4),
+        0 20px 60px rgba(0,0,0,0.5);
+      overflow: visible;
+      position: relative;
+      min-height: 560px;
+      transform-style: preserve-3d;
+    }
+
+    .spread {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease;
+    }
+
+    .spread.current {
+      position: relative;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .flip-shadow {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: calc(50% - 16px);
+      height: 100%;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.08s ease;
+      background: linear-gradient(110deg, transparent 0%, transparent 35%, rgba(0,0,0,0.12) 75%, rgba(0,0,0,0.28) 100%);
+      z-index: 2;
+    }
+
+    .page {
+      flex: 1;
+      min-height: 560px;
+      background: var(--paper);
+      padding: 2.5rem 2.5rem 3rem;
+      position: relative;
+    }
+
+    .page-left {
+      border-radius: 0 2px 2px 0;
+      border: 1px solid var(--paper-edge);
+      border-left: none;
+      box-shadow:
+        inset 12px 0 20px -12px rgba(0,0,0,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+
+    .spine {
+      width: 28px;
+      flex-shrink: 0;
+      background: linear-gradient(
+        90deg,
+        var(--spine-dark) 0%,
+        var(--spine-mid) 15%,
+        var(--spine-light) 50%,
+        var(--spine-mid) 85%,
+        var(--spine-dark) 100%
+      );
+      box-shadow:
+        inset -2px 0 8px rgba(0,0,0,0.25),
+        inset 2px 0 6px rgba(255,255,255,0.08);
+    }
+
+    .page-flip {
+      flex: 1;
+      position: relative;
+      min-height: 560px;
+      transform-style: preserve-3d;
+      transform-origin: left center;
+      transition: transform 0.5s cubic-bezier(0.33, 0.66, 0.66, 1);
+    }
+
+    .page-flip.dragging {
+      transition: none;
+    }
+
+    .page-flip.turning {
+      transform: rotateY(-180deg);
+    }
+
+    .page-flip .page-front,
+    .page-flip .page-back {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      padding: 2.5rem 2.5rem 3rem;
+      background: var(--paper);
+      border: 1px solid var(--paper-edge);
+      box-shadow: inset -12px 0 20px -12px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5);
+      min-height: 560px;
+    }
+
+    .page-flip .page-front {
+      border-radius: 2px 0 0 2px;
+      border-right: none;
+      z-index: 2;
+    }
+
+    .page-flip .page-back {
+      border-radius: 0 2px 2px 0;
+      border-left: none;
+      transform: rotateY(180deg);
+      z-index: 1;
+      background: linear-gradient(90deg, #d8d2c8 0%, #e4dfd6 15%, #eae6de 100%);
+    }
+
+    .page-corner {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 0 0 70px 110px;
+      border-color: transparent transparent #c9bfb0 transparent;
+      cursor: grab;
+      z-index: 5;
+    }
+
+    .page-corner .corner-hint {
+      position: absolute;
+      right: 14px;
+      bottom: 18px;
+      font-size: 0.75rem;
+      color: var(--ink-muted);
+      pointer-events: none;
+    }
+
+    .page-corner:hover {
+      border-bottom-color: #b8ac9c;
+    }
+
+    .page-corner:active {
+      cursor: grabbing;
+    }
+
+    .page-right {
+      border-radius: 2px 0 0 2px;
+      border: 1px solid var(--paper-edge);
+      border-right: none;
+      box-shadow:
+        inset -12px 0 20px -12px rgba(0,0,0,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+
+    .page-number {
+      position: absolute;
+      bottom: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--ink-muted);
+    }
+
+    .page-left .page-number { left: 2.5rem; }
+    .page-right .page-number,
+    .page-flip .page-number { right: 2.5rem; }
+
+    .chapter-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 1.25rem;
+      letter-spacing: 0.02em;
+    }
+
+    .drop-cap::first-letter {
+      float: left;
+      font-size: 3.2rem;
+      line-height: 0.85;
+      margin: 0.08em 0.12em 0 -0.02em;
+      color: var(--accent);
+    }
+
+    p {
+      margin-bottom: 1em;
+      text-align: justify;
+      hyphens: auto;
+    }
+
+    p:last-child { margin-bottom: 0; }
+
+    .book-nav {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+
+    .book-nav button {
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 1rem;
+      padding: 0.5rem 1.25rem;
+      background: var(--spine-mid);
+      color: var(--paper);
+      border: 1px solid var(--spine-dark);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .book-nav button:hover { background: var(--spine-dark); }
+    .book-nav button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Spread 3: Chapter 3 — Finding countries (embedded globe book) */
+    .spread[data-spread="3"] {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+    .spread[data-spread="3"] .spread-3-header {
+      flex-shrink: 0;
+      padding: 0.75rem 1.5rem 0.5rem;
+      background: #1a1612;
+      border-radius: 0 8px 0 0;
+    }
+    .spread[data-spread="3"] .spread-3-header .chapter-title {
+      margin-bottom: 0.25rem;
+      color: #e8e0d4;
+      font-size: 1.2rem;
+    }
+    .spread[data-spread="3"] .chapter-sub {
+      font-size: 0.85rem;
+      color: #a89888;
+      margin: 0;
+    }
+    .spread[data-spread="3"] .spread-embed {
+      display: block;
+      flex: 1;
+      width: 100%;
+      min-height: 500px;
+      border: none;
+      border-radius: 0 0 8px 8px;
+      background: #1a1612;
+    }
+
+    @media (max-width: 720px) {
+      .book-wrap {
+        flex-direction: column;
+        border-radius: 8px;
+        box-shadow:
+          inset 0 0 0 1px rgba(0,0,0,0.06),
+          0 4px 20px rgba(0,0,0,0.3),
+          0 20px 50px rgba(0,0,0,0.4);
+      }
+
+      .spread { flex-direction: column; }
+
+      .spine {
+        width: 100%;
+        height: 12px;
+        background: linear-gradient(180deg, var(--spine-dark) 0%, var(--spine-mid) 50%, var(--spine-dark) 100%);
+      }
+
+      .page-flip { display: none; }
+      .page-flip .page-front { display: block; position: relative; }
+      .page-flip .page-back { display: none; }
+      .page-flip.turning { transform: none; }
+
+      .page-left {
+        border-radius: 8px 8px 0 0;
+        border: 1px solid var(--paper-edge);
+        border-bottom: none;
+      }
+
+      .page-right, .page-flip .page-front {
+        border-radius: 0 0 8px 8px;
+        border: 1px solid var(--paper-edge);
+        border-top: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="book-holder">
+    <div class="book-wrap">
+      <!-- Spread 1: pages 1–2 -->
+      <div class="spread current" data-spread="1">
+        <div class="flip-shadow" id="flip-shadow"></div>
+        <div class="page page-left">
+          <h2 class="chapter-title">Chapter One — Continents</h2>
+          <p class="drop-cap">A continent is one of Earth’s major landmasses. By the most common count there are <strong>seven continents</strong>: Africa, Antarctica, Asia, Europe, North America, Oceania, and South America.</p>
+          <p>Some geographers count six, grouping Europe and Asia as Eurasia. Others treat Oceania as part of a larger Asia-Pacific region. In this book we use the seven-continent model.</p>
+          <p>Continents hold nearly all of the world’s land and most of its people. They vary greatly in size: Asia is the largest, Australia (the main part of Oceania) the smallest.</p>
+          <span class="page-number">1</span>
+        </div>
+        <div class="spine" aria-hidden="true"></div>
+        <div class="page-flip" id="flip-page">
+          <div class="page-front">
+            <div class="page-corner" id="page-corner" title="Turn page"><span class="corner-hint">Next</span></div>
+            <p>Each continent is divided into countries. Africa has over fifty nations; Asia has about fifty; Europe has around forty-five. North and South America together have thirty-five or so, Oceania about twenty, and Antarctica has no permanent sovereign countries—only research stations and territorial claims.</p>
+            <p>Turn the page to read about countries, then open <em>My World</em> to explore the globe by continent and country.</p>
+            <span class="page-number">2</span>
+          </div>
+          <div class="page-back" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <!-- Spread 2: pages 3–4 -->
+      <div class="spread" data-spread="2">
+        <div class="page page-left">
+          <h2 class="chapter-title">Chapter Two — Countries</h2>
+          <p class="drop-cap">There are about <strong>195 countries</strong> in the world today. That number includes 193 member states of the United Nations plus the Vatican and Palestine (observer or disputed), and depends on how territories and recognition are counted.</p>
+          <p>A country is a distinct territory with its own government, borders, and usually international recognition. Countries range from huge—Russia, Canada, China, the United States—to tiny city-states like Monaco and Singapore, or small island nations like Malta and the Maldives.</p>
+          <span class="page-number">3</span>
+        </div>
+        <div class="spine" aria-hidden="true"></div>
+        <div class="page page-right">
+          <p>Populations vary just as much: from over a billion people in India and China to fewer than a thousand in some island states. Every country has a capital, a flag, and a place on the map.</p>
+          <p>In <em>My World</em> on the next spread you can browse countries by continent, search by name, and spin the globe to any place on Earth.</p>
+          <span class="page-number">4</span>
+        </div>
+      </div>
+
+      <!-- Spread 3: Chapter 3 — Finding countries (globe book) -->
+      <div class="spread" data-spread="3">
+        <div class="spread-3-header">
+          <h2 class="chapter-title">Chapter Three — Finding countries</h2>
+          <p class="chapter-sub">Select a country on the globe or from the list, then click <strong>Detail</strong> to see more.</p>
+        </div>
+        <iframe class="spread-embed" src="py_world.html" title="My World — Globe"></iframe>
+      </div>
+    </div>
+
+    <nav class="book-nav" aria-label="Book navigation">
+      <button type="button" id="btn-prev" disabled>← Previous</button>
+      <button type="button" id="btn-next">Next →</button>
+    </nav>
+  </div>
+
+  <script>
+    (function() {
+      const spreads = document.querySelectorAll('.spread');
+      const flipPage = document.getElementById('flip-page');
+      const flipShadow = document.getElementById('flip-shadow');
+      const pageCorner = document.getElementById('page-corner');
+      const pageFront = flipPage ? flipPage.querySelector('.page-front') : null;
+      const btnPrev = document.getElementById('btn-prev');
+      const btnNext = document.getElementById('btn-next');
+      let current = 1;
+      const total = spreads.length;
+      let dragStartX = 0;
+      let isDragging = false;
+
+      function completeTurn() {
+        if (!flipPage || current >= total) return;
+        flipPage.classList.remove('dragging');
+        flipPage.style.transform = '';
+        if (flipShadow) flipShadow.style.opacity = '';
+        flipPage.classList.add('turning');
+        btnNext.disabled = true;
+        btnPrev.disabled = true;
+        if (flipShadow) {
+          var start = null;
+          var sh = flipShadow;
+          function step(now) {
+            if (!start) start = now;
+            var t = (now - start) / 500;
+            if (t < 1) {
+              sh.style.opacity = Math.sin(t * Math.PI) * 0.5;
+              requestAnimationFrame(step);
+            } else {
+              sh.style.opacity = '0';
+            }
+          }
+          requestAnimationFrame(step);
+        }
+        flipPage.addEventListener('transitionend', function onEnd() {
+          flipPage.removeEventListener('transitionend', onEnd);
+          flipPage.classList.remove('turning');
+          spreads.forEach(s => s.classList.remove('current'));
+          current++;
+          const next = document.querySelector('.spread[data-spread="' + current + '"]');
+          if (next) next.classList.add('current');
+          btnPrev.disabled = current <= 1;
+          btnNext.disabled = current >= total;
+        }, { once: true });
+      }
+
+      function goNext() {
+        if (current >= total || isDragging) return;
+        if (current === 1 && flipPage) {
+          completeTurn();
+        } else {
+          spreads.forEach(s => s.classList.remove('current'));
+          current++;
+          const next = document.querySelector('.spread[data-spread="' + current + '"]');
+          if (next) next.classList.add('current');
+          btnPrev.disabled = current <= 1;
+          btnNext.disabled = current >= total;
+        }
+      }
+
+      function goPrev() {
+        if (current <= 1) return;
+        spreads.forEach(s => s.classList.remove('current'));
+        current--;
+        document.querySelector('.spread[data-spread="' + current + '"]').classList.add('current');
+        btnPrev.disabled = current <= 1;
+        btnNext.disabled = current >= total;
+      }
+
+      function onMove(e) {
+        if (!isDragging || !flipPage) return;
+        const w = flipPage.offsetWidth;
+        const dx = dragStartX - e.clientX;
+        const deg = Math.max(-180, Math.min(0, -180 * (dx / w)));
+        flipPage.style.transform = 'rotateY(' + deg + 'deg)';
+        if (flipShadow) flipShadow.style.opacity = Math.sin((Math.abs(deg) * Math.PI) / 180) * 0.55;
+      }
+
+      function onUp(e) {
+        if (!isDragging || !flipPage) return;
+        isDragging = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        const w = flipPage.offsetWidth;
+        const dx = dragStartX - e.clientX;
+        if (dx > w * 0.3 && current < total) {
+          completeTurn();
+        } else {
+          flipPage.classList.remove('dragging');
+          flipPage.style.transform = '';
+          if (flipShadow) flipShadow.style.opacity = '';
+        }
+      }
+
+      if (pageCorner && flipPage) {
+        pageCorner.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          if (current >= total) return;
+          isDragging = true;
+          dragStartX = e.clientX;
+          flipPage.classList.add('dragging');
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      }
+
+      btnNext.addEventListener('click', goNext);
+      btnPrev.addEventListener('click', goPrev);
+    })();
+  </script>
+</body>
+</html>

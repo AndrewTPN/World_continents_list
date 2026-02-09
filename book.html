@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #f6f2ea;
+      --paper-edge: #e8e0d4;
+      --ink: #2c2825;
+      --ink-muted: #5a5550;
+      --spine-dark: #6b5d4f;
+      --spine-mid: #8b7d6d;
+      --spine-light: #a89888;
+      --accent: #6b5344;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { min-height: 100%; }
+
+    body {
+      font-family: 'Crimson Pro', Georgia, serif;
+      background: #1a1612;
+      color: var(--ink);
+      min-height: 100vh;
+      padding: 3rem 1rem;
+      line-height: 1.65;
+    }
+
+    .book-holder {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2rem 0;
+      perspective: 1200px;
+    }
+
+    .book-wrap {
+      display: flex;
+      align-items: stretch;
+      border-radius: 0 8px 8px 0;
+      box-shadow:
+        inset 0 0 0 1px rgba(0,0,0,0.06),
+        2px 0 12px rgba(0,0,0,0.15),
+        4px 0 24px rgba(0,0,0,0.2),
+        8px 8px 40px rgba(0,0,0,0.4),
+        0 20px 60px rgba(0,0,0,0.5);
+      overflow: visible;
+      position: relative;
+    }
+
+    .page {
+      flex: 1;
+      min-height: 560px;
+      background: var(--paper);
+      padding: 2.5rem 2.5rem 3rem;
+      position: relative;
+    }
+
+    .page-left {
+      border-radius: 0 2px 2px 0;
+      border: 1px solid var(--paper-edge);
+      border-left: none;
+      box-shadow:
+        inset 12px 0 20px -12px rgba(0,0,0,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.6);
+      margin-right: 0;
+    }
+
+    .spine {
+      width: 28px;
+      flex-shrink: 0;
+      background: linear-gradient(
+        90deg,
+        var(--spine-dark) 0%,
+        var(--spine-mid) 15%,
+        var(--spine-light) 50%,
+        var(--spine-mid) 85%,
+        var(--spine-dark) 100%
+      );
+      box-shadow:
+        inset -2px 0 8px rgba(0,0,0,0.25),
+        inset 2px 0 6px rgba(255,255,255,0.08);
+    }
+
+    .page-right {
+      border-radius: 2px 0 0 2px;
+      border: 1px solid var(--paper-edge);
+      border-right: none;
+      box-shadow:
+        inset -12px 0 20px -12px rgba(0,0,0,0.12),
+        inset 0 1px 0 rgba(255,255,255,0.6);
+      margin-left: 0;
+    }
+
+    .page-number {
+      position: absolute;
+      bottom: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--ink-muted);
+    }
+
+    .page-left .page-number { left: 2.5rem; }
+    .page-right .page-number { right: 2.5rem; }
+
+    .chapter-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 1.25rem;
+      letter-spacing: 0.02em;
+    }
+
+    .drop-cap::first-letter {
+      float: left;
+      font-size: 3.2rem;
+      line-height: 0.85;
+      margin: 0.08em 0.12em 0 -0.02em;
+      color: var(--accent);
+    }
+
+    p {
+      margin-bottom: 1em;
+      text-align: justify;
+      hyphens: auto;
+    }
+
+    p:last-child { margin-bottom: 0; }
+
+    @media (max-width: 720px) {
+      .book-wrap {
+        flex-direction: column;
+        border-radius: 8px;
+        box-shadow:
+          inset 0 0 0 1px rgba(0,0,0,0.06),
+          0 4px 20px rgba(0,0,0,0.3),
+          0 20px 50px rgba(0,0,0,0.4);
+      }
+
+      .spine {
+        width: 100%;
+        height: 12px;
+        background: linear-gradient(
+          180deg,
+          var(--spine-dark) 0%,
+          var(--spine-mid) 50%,
+          var(--spine-dark) 100%
+        );
+      }
+
+      .page-left {
+        border-radius: 8px 8px 0 0;
+        border: 1px solid var(--paper-edge);
+        border-bottom: none;
+        box-shadow: inset 0 8px 16px -8px rgba(0,0,0,0.1);
+      }
+
+      .page-right {
+        border-radius: 0 0 8px 8px;
+        border: 1px solid var(--paper-edge);
+        border-top: none;
+        box-shadow: inset 0 -8px 16px -8px rgba(0,0,0,0.1);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="book-holder">
+    <div class="book-wrap">
+      <div class="page page-left">
+      <h2 class="chapter-title">Chapter One</h2>
+      <p class="drop-cap">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>
+      <p>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</p>
+      <span class="page-number">1</span>
+    </div>
+    <div class="page page-right">
+      <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet.</p>
+      <p>Consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam.</p>
+      <p>Nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>
+      <span class="page-number">2</span>
+    </div>
+  </div>
+</body>
+</html>
