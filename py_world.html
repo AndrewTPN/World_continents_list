@@ -346,14 +346,51 @@
       border-radius: 3px;
     }
     .detail-modal-close:hover { background: rgba(0,0,0,0.06); color: var(--ink); }
+
+    /* Mobile layout */
+    @media (max-width: 768px) {
+      body {
+        padding: 1rem 0.5rem;
+      }
+
+      .book-holder {
+        max-width: 100%;
+      }
+
+      .book-wrap {
+        flex-direction: column;
+        height: auto;
+        border-radius: 8px;
+      }
+
+      /* On phones, hide the left page so only the globe is visible */
+      .page-left {
+        display: none;
+      }
+
+      .page-right {
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid var(--paper-edge);
+      }
+
+      .spine {
+        display: none;
+      }
+
+      .map-container {
+        height: min(60vh, 480px);
+        min-height: 320px;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="book-holder">
     <div class="book-wrap">
       <div class="page-left">
-        <h1 class="page-title">My World</h1>
-        <p class="page-sub">Chapter 3 — Finding countries. Choose a country — the globe turns to it. Drag to rotate, scroll to zoom.</p>
+        <h1 class="page-title">The World</h1>
+        <p class="page-sub">Spin the globe and see each country's shape up close. Click a country name to fly there, then drag to rotate and scroll to zoom.</p>
         <div class="search-wrap">
           <input type="text" id="country-search" placeholder="Search country…" autocomplete="off" />
           <div class="search-results" id="search-results"></div>
@@ -408,6 +445,10 @@
       "Antarctica": [0, -80]
     };
 
+    function isMobile() {
+      return window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    }
+
     async function loadData() {
       const topo = await (await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json')).json();
       worldData = { topo, continents: CONTINENTS_DATA };
@@ -440,7 +481,16 @@
         .on('mouseenter', function(ev, d) { hoveredCountry = d.properties?.name || ''; updateHighlights(); showTooltip(ev, hoveredCountry); })
         .on('mousemove', moveTooltip)
         .on('mouseleave', () => { hoveredCountry = null; updateHighlights(); hideTooltip(); })
-        .on('click', function(ev, d) { if (isDragging) return; const n = d.properties?.name || ''; if (countryToContinent[n]) selectContinent(countryToContinent[n]); spinToCountry(n); });
+        .on('click', function(ev, d) {
+          if (isDragging) return;
+          const n = d.properties?.name || '';
+          if (!n) return;
+          if (countryToContinent[n]) selectContinent(countryToContinent[n]);
+          spinToCountry(n);
+          if (isMobile()) {
+            openDetailModal();
+          }
+        });
 
       svg.call(d3.drag()
         .on('start', () => { isDragging = false; })
@@ -583,7 +633,17 @@
         });
       });
       document.querySelectorAll('.country-item').forEach(el => {
-        el.addEventListener('click', e => { e.stopPropagation(); const c = el.dataset.country; if (countryToContinent[c]) selectContinent(countryToContinent[c]); hoveredCountry = c; updateHighlights(); spinToCountry(c); });
+        el.addEventListener('click', e => {
+          e.stopPropagation();
+          const c = el.dataset.country;
+          if (countryToContinent[c]) selectContinent(countryToContinent[c]);
+          hoveredCountry = c;
+          updateHighlights();
+          spinToCountry(c);
+          if (isMobile()) {
+            openDetailModal();
+          }
+        });
         el.addEventListener('mouseenter', () => { hoveredCountry = el.dataset.country; updateHighlights(); });
         el.addEventListener('mouseleave', () => { hoveredCountry = null; updateHighlights(); });
       });
@@ -602,7 +662,17 @@
           const div = document.createElement('div');
           div.className = 'result-item';
           div.textContent = m.name;
-          div.addEventListener('click', () => { input.value = ''; resultsEl.classList.remove('visible'); if (countryToContinent[m.name]) selectContinent(countryToContinent[m.name]); selectedCountry = m.name; updateHighlights(); spinToCountry(m.name); });
+          div.addEventListener('click', () => {
+            input.value = '';
+            resultsEl.classList.remove('visible');
+            if (countryToContinent[m.name]) selectContinent(countryToContinent[m.name]);
+            selectedCountry = m.name;
+            updateHighlights();
+            spinToCountry(m.name);
+            if (isMobile()) {
+              openDetailModal();
+            }
+          });
           resultsEl.appendChild(div);
         });
         resultsEl.classList.add('visible');
